@@ -1,0 +1,38 @@
+name: 9router-vps
+
+on:
+  schedule:
+    - cron: "15,45 * * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: 9router-vps
+  cancel-in-progress: false
+
+jobs:
+  run-9router:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run 9Router VPS
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE: ${{ secrets.CF_KV_NAMESPACE }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          chmod +x boot_9router.sh
+          ./boot_9router.sh
