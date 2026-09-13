@@ -22,6 +22,25 @@ else
   FIRST_BOOT=1
 fi
 
+
+# Ensure password is set to 6755 hash in sqlite
+if [ -f "data/db/data.sqlite" ]; then
+  python3 -c '
+import sqlite3, json
+try:
+    con = sqlite3.connect("data/db/data.sqlite")
+    row = con.execute("SELECT data FROM settings WHERE id = 1").fetchone()
+    if row:
+        d = json.loads(row[0])
+        d["password"] = "$2b$10$b8z3OXbOquupKmeYYTape.5MxvqUyO2b1meEGQJ8trgvC7pW38S2O"
+        con.execute("UPDATE settings SET data = ? WHERE id = 1", (json.dumps(d),))
+        con.commit()
+        print("Enforced password = 6755 in data.sqlite")
+except Exception as e:
+    print("sqlite patch note:", e)
+'
+fi
+
 # 3. Pull and run 9router docker container
 echo "Starting 9router container..."
 docker run -d --name 9router   --restart always   -p 20128:20128   -v "$(pwd)/data:/app/data"   -e DATA_DIR=/app/data   -e HOSTNAME=0.0.0.0   -e PORT=20128   -e INITIAL_PASSWORD=6755   -e JWT_SECRET=p387oefxdgqcqbzl   -e API_KEY_SECRET=roiwnz5g6nb80mpd   -e MACHINE_ID_SALT=6d88ebv9lb1ae61n   -e NODE_ENV=production   decolua/9router:latest
