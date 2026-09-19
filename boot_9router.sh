@@ -22,7 +22,6 @@ else
   FIRST_BOOT=1
 fi
 
-
 # Ensure password is set to 6755 hash in sqlite
 if [ -f "data/db/data.sqlite" ]; then
   python3 -c '
@@ -43,7 +42,19 @@ fi
 
 # 3. Pull and run 9router docker container
 echo "Starting 9router container..."
-docker run -d --name 9router   --restart always   -p 20128:20128   -v "$(pwd)/data:/app/data"   -e DATA_DIR=/app/data   -e HOSTNAME=0.0.0.0   -e PORT=20128   -e INITIAL_PASSWORD=6755   -e JWT_SECRET=p387oefxdgqcqbzl   -e API_KEY_SECRET=roiwnz5g6nb80mpd   -e MACHINE_ID_SALT=6d88ebv9lb1ae61n   -e NODE_ENV=production   decolua/9router:latest
+docker run -d --name 9router \
+  --restart always \
+  -p 20128:20128 \
+  -v "$(pwd)/data:/app/data" \
+  -e DATA_DIR=/app/data \
+  -e HOSTNAME=0.0.0.0 \
+  -e PORT=20128 \
+  -e INITIAL_PASSWORD=6755 \
+  -e JWT_SECRET=p387oefxdgqcqbzl \
+  -e API_KEY_SECRET=roiwnz5g6nb80mpd \
+  -e MACHINE_ID_SALT=6d88ebv9lb1ae61n \
+  -e NODE_ENV=production \
+  decolua/9router:latest
 
 # 4. Wait for 9router health
 echo "Waiting for 9router to answer..."
@@ -87,7 +98,9 @@ fi
 
 # 7. Update Cloudflare KV namespace with the new Tunnel URL
 echo "Updating Cloudflare KV..."
-curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/storage/kv/namespaces/$CF_KV_NAMESPACE/values/current_url"   -H "Authorization: Bearer $CF_API_TOKEN"   --data "$TUNNEL_URL"
+curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/storage/kv/namespaces/$CF_KV_NAMESPACE/values/current_url" \
+  -H "Authorization: Bearer $CF_API_TOKEN" \
+  --data "$TUNNEL_URL"
 echo ""
 
 PERM_URL="https://9router-stable.qasmynhmdmhdy.workers.dev"
@@ -103,12 +116,32 @@ EOF
 echo "=== BOOT COMPLETE ==="
 cat /tmp/vps-state/boot_receipt.txt
 
+# Helper function to checkpoint SQLite and flush WAL
+flush_sqlite() {
+  docker exec 9router node -e '
+    try {
+      const sqlite3 = require("better-sqlite3");
+      const db = new sqlite3("/app/data/db/data.sqlite");
+      db.pragma("wal_checkpoint(TRUNCATE)");
+      db.close();
+    } catch(e) {}
+  ' 2>/dev/null || true
+}
+
 # 9. Initial state push
+flush_sqlite
 python3 vps_state.py push-once
 
 # 10. Start background periodic state sync
-python3 vps_state.py push-loop &
-PUSH_LOOP_PID=$!
+sync_loop() {
+  while true; do
+    sleep 60
+    flush_sqlite
+    python3 vps_state.py push-once || true
+  done
+}
+sync_loop &
+SYNC_LOOP_PID=$!
 
 # 11. Shift monitor loop (267 minutes = 16020 seconds)
 START_TIME=$(date +%s)
@@ -135,13 +168,16 @@ while true; do
     sleep 5
     NEW_TUNNEL=$(grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' cloudflared.log | head -n1 || true)
     if [ -n "$NEW_TUNNEL" ]; then
-      curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/storage/kv/namespaces/$CF_KV_NAMESPACE/values/current_url"         -H "Authorization: Bearer $CF_API_TOKEN"         --data "$NEW_TUNNEL"
+      curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/storage/kv/namespaces/$CF_KV_NAMESPACE/values/current_url" \
+        -H "Authorization: Bearer $CF_API_TOKEN" \
+        --data "$NEW_TUNNEL"
     fi
   fi
 
   sleep 30
 done
 
-kill "$PUSH_LOOP_PID" 2>/dev/null || true
+kill "$SYNC_LOOP_PID" 2>/dev/null || true
+flush_sqlite
 python3 vps_state.py push-once
 echo "Shift ended cleanly."
