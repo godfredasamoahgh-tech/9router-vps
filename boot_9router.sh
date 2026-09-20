@@ -40,8 +40,9 @@ except Exception as e:
 '
 fi
 
-# 3. Pull and run 9router docker container
-echo "Starting 9router container..."
+# 3. Build/Run latest 9router container (v0.5.81)
+echo "Building/Starting 9router v0.5.81 container..."
+docker build -t 9router:0.5.81 .
 docker run -d --name 9router \
   --restart always \
   -p 20128:20128 \
@@ -54,7 +55,7 @@ docker run -d --name 9router \
   -e API_KEY_SECRET=roiwnz5g6nb80mpd \
   -e MACHINE_ID_SALT=6d88ebv9lb1ae61n \
   -e NODE_ENV=production \
-  decolua/9router:latest
+  9router:0.5.81
 
 # 4. Wait for 9router health
 echo "Waiting for 9router to answer..."
