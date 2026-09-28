@@ -1,4 +1,4 @@
-=== 2026-09-28T05:50:01Z 9Router VPS Boot Receipt ===
+=== 2026-09-28T10:18:45Z 9Router VPS Boot Receipt ===
 OK  Docker: 9router running (port 20128)
-OK  Tunnel: https://zus-void-playback-handheld.trycloudflare.com
+OK  Tunnel: https://auburn-pool-such-themselves.trycloudflare.com
 OK  Cloudflare Worker: https://9router-stable.qasmynhmdmhdy.workers.dev
